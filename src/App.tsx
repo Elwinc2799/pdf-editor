@@ -39,12 +39,11 @@ export default function App() {
     const formData = new FormData()
     formData.append('file', file)
     
-    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-    let endpoint = `${API_BASE_URL}/api/split`
+    let endpoint = '/api/split'
     if (mode === 'split') {
       formData.append('pages_for_pdf1', pageNumbers)
     } else {
-      endpoint = `${API_BASE_URL}/api/keep`
+      endpoint = '/api/keep'
       formData.append('pages_to_keep', pageNumbers)
     }
 
