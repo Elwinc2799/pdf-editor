@@ -117,3 +117,61 @@ async def keep_pages_api(
     return StreamingResponse(output_io, media_type="application/pdf", headers={
         "Content-Disposition": f"attachment; filename=kept_pages.pdf"
     })
+
+@app.post("/api/advanced-split")
+async def advanced_split_api(
+    file: UploadFile = File(...), 
+    config: str = Form(...)
+):
+    """
+    Advanced interactive split.
+    config should be a JSON string like:
+    [
+        {"name": "name 1", "pages": [0, 2, 6]},
+        {"name": "name 2", "pages": [1, 3]}
+    ]
+    pages uses 0-based indexing.
+    """
+    try:
+        buckets = json.loads(config)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON config format.")
+        
+    pdf_bytes = await file.read()
+    input_pdf = io.BytesIO(pdf_bytes)
+    
+    try:
+        reader = pypdf.PdfReader(input_pdf)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid PDF file or corrupted data.")
+        
+    total_pages = len(reader.pages)
+    
+    zip_io = io.BytesIO()
+    with zipfile.ZipFile(zip_io, "w") as zf:
+        for i, bucket in enumerate(buckets):
+            bucket_name = bucket.get("name", f"document_{i+1}").strip()
+            if not bucket_name:
+                bucket_name = f"document_{i+1}"
+            if not bucket_name.lower().endswith(".pdf"):
+                bucket_name += ".pdf"
+                
+            pages_list = bucket.get("pages", [])
+            
+            writer = pypdf.PdfWriter()
+            added_pages = 0
+            for page_num in pages_list:
+                if 0 <= page_num < total_pages:
+                    writer.add_page(reader.pages[page_num])
+                    added_pages += 1
+            
+            if added_pages > 0:
+                output_io = io.BytesIO()
+                writer.write(output_io)
+                zf.writestr(bucket_name, output_io.getvalue())
+                
+    zip_io.seek(0)
+    
+    return StreamingResponse(zip_io, media_type="application/zip", headers={
+        "Content-Disposition": "attachment; filename=split_pdfs.zip"
+    })
